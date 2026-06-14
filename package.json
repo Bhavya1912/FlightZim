@@ -1,0 +1,23 @@
+{
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "server": "tsx server/index.ts",
+    "check": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "three": "latest",
+    "zustand": "latest",
+    "express": "latest",
+    "ws": "latest",
+    "pg": "latest"
+  },
+  "devDependencies": {
+    "tsx": "latest"
+  }
+}
