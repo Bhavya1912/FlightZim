@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flight Simulator</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0c10;color:#e8dfc0;font-family:'Courier New',monospace;overflow:hidden;width:100vw;height:100vh}
+#sim-root{width:100%;height:100vh;display:flex;flex-direction:column}
+#canvas-wrap{position:relative;flex:1;overflow:hidden}
+#three-canvas{width:100%;height:100%;display:block}
+#hud{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
+#speed-tape{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:60px;height:200px;background:rgba(10,14,20,0.85);border:1px solid #2a3a2a;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#alt-tape{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:60px;height:200px;background:rgba(10,14,20,0.85);border:1px solid #2a3a2a;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.tape-val{font-size:22px;font-weight:700;color:#00ff88;letter-spacing:1px}
+.tape-lbl{font-size:10px;color:#7a9a7a;margin-top:3px;letter-spacing:2px}
+#adi-outer{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:160px;height:160px}
+#adi-bg{width:160px;height:160px;border-radius:50%;background:rgba(10,14,20,0.85);border:2px solid #2a4a3a;overflow:hidden;position:relative}
+#adi-sky{position:absolute;width:100%;background:#1a3a6a}
+#adi-ground{position:absolute;width:100%;background:#5a3a1a}
+#adi-horizon{position:absolute;left:0;right:0;height:2px;background:#e8c060}
+#adi-aircraft{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#e8c060;font-size:22px;z-index:10;pointer-events:none}
+#vsi-wrap{position:absolute;right:80px;top:50%;transform:translateY(-50%);width:42px;height:180px;background:rgba(10,14,20,0.85);border:1px solid #2a3a2a;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+#vsi-arrow{font-size:24px;color:#00ff88}
+.vsi-lbl{font-size:8px;color:#5a8a5a;letter-spacing:1px}
+#throttle-wrap{position:absolute;left:80px;top:50%;transform:translateY(-50%);width:30px;height:180px;background:rgba(10,14,20,0.85);border:1px solid #2a3a2a;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:6px 0}
+#throttle-bar-bg{flex:1;width:12px;background:#1a2a1a;border-radius:3px;position:relative;margin:4px 0}
+#throttle-bar-fill{position:absolute;bottom:0;left:0;right:0;background:#e8a020;border-radius:3px}
+.thr-lbl{font-size:8px;color:#5a8a5a;letter-spacing:1px}
+#compass-wrap{position:absolute;bottom:80px;left:50%;transform:translateX(-50%);width:320px}
+#hdg-box{text-align:center;background:#1a2a1a;border:1px solid #3a6a3a;border-radius:3px;padding:3px 8px;font-size:13px;color:#00ff88;letter-spacing:2px;margin-bottom:4px}
+#compass-strip{width:320px;height:40px;background:rgba(10,14,20,0.85);border:1px solid #2a3a2a;border-radius:4px;overflow:hidden;position:relative}
+#compass-track{position:absolute;top:0;height:100%;display:flex;align-items:center;white-space:nowrap;font-size:10px;color:#7a9a7a;letter-spacing:1px}
+#compass-center-line{position:absolute;left:50%;top:0;bottom:0;width:2px;background:#e8c060;transform:translateX(-50%)}
+#status-strip{position:absolute;top:10px;right:12px;display:flex;flex-direction:column;gap:4px}
+.status-item{background:rgba(10,14,20,0.85);border:1px solid #2a3a2a;border-radius:3px;padding:3px 8px;font-size:10px;color:#7a9a7a;letter-spacing:1px;white-space:nowrap}
+.status-val{color:#e8dfc0;font-weight:700}
+.status-ok{color:#00ff88}
+.status-warn{color:#e8a020}
+#gear-flap{position:absolute;top:10px;left:80px;display:flex;flex-direction:column;gap:4px}
+.gf-item{background:rgba(10,14,20,0.85);border:1px solid #2a3a2a;border-radius:3px;padding:3px 8px;font-size:10px;letter-spacing:1px}
+#stall-warn{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);color:#ff3030;font-size:28px;font-weight:700;letter-spacing:4px;display:none;text-shadow:0 0 12px #ff3030;animation:blink 0.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.1}}
+#phase-badge{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(10,14,20,0.85);border:1px solid #2a4a3a;border-radius:4px;padding:4px 14px;font-size:11px;color:#7ab070;letter-spacing:2px}
+#controls-panel{height:90px;background:#0d1018;border-top:1px solid #1a2a1a;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;flex-shrink:0}
+.ctrl-key{background:#141820;border:1px solid #2a3a4a;border-radius:4px;padding:4px 8px;font-size:11px;color:#7aa0c0;font-family:'Courier New',monospace;min-width:32px;text-align:center}
+.ctrl-desc{font-size:10px;color:#4a6a7a;letter-spacing:1px;margin-right:10px}
+.ctrl-sep{width:1px;height:36px;background:#1a2a2a;margin:0 6px}
+#start-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(5,8,14,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:100}
+#start-overlay h1{font-size:36px;color:#e8c060;letter-spacing:8px;text-shadow:0 0 20px #e8a020}
+#start-overlay p{font-size:13px;color:#7a9a7a;letter-spacing:2px}
+#start-btn{background:#1a3a1a;border:2px solid #3a8a3a;border-radius:6px;padding:12px 40px;font-size:16px;color:#00ff88;font-family:'Courier New',monospace;letter-spacing:4px;cursor:pointer}
+#start-btn:hover{background:#2a5a2a}
+</style>
+</head>
+<body>
+<div id="sim-root">
+  <div id="canvas-wrap">
+    <canvas id="three-canvas"></canvas>
+    <div id="hud">
+      <div id="start-overlay">
+        <h1>✈ FLIGHT SIM</h1>
+        <p>BOEING 737 · RUNWAY 09L · CLEAR SKIES</p>
+        <button id="start-btn" onclick="startSim()">▶ CLICK TO FLY</button>
+        <p style="font-size:11px">F = Throttle Up &nbsp;|&nbsp; W = Pitch Up &nbsp;|&nbsp; A/D = Roll &nbsp;|&nbsp; G = Gear</p>
+      </div>
+
+      <div id="speed-tape">
+        <div class="tape-val" id="spd-val">0</div>
+        <div class="tape-lbl">KTS</div>
+        <div style="margin-top:8px;font-size:9px;color:#3a6a3a">SPEED</div>
+      </div>
+
+      <div id="throttle-wrap">
+        <div class="thr-lbl">THR</div>
+        <div id="throttle-bar-bg">
+          <div id="throttle-bar-fill" style="height:0%"></div>
+        </div>
+        <div class="thr-lbl" id="thr-pct">0%</div>
+      </div>
+
+      <div id="adi-outer">
+        <div id="adi-bg">
+          <div id="adi-sky" style="top:0;height:50%"></div>
+          <div id="adi-ground" style="top:50%;height:50%"></div>
+          <div id="adi-horizon" style="top:50%"></div>
+        </div>
+        <div id="adi-aircraft">⊕</div>
+      </div>
+
+      <div id="alt-tape">
+        <div class="tape-val" id="alt-val">0</div>
+        <div class="tape-lbl">FT</div>
+        <div style="margin-top:8px;font-size:9px;color:#3a6a3a">ALT</div>
+      </div>
+
+      <div id="vsi-wrap">
+        <div class="vsi-lbl">VSI</div>
+        <div id="vsi-arrow">↕</div>
+        <div id="vsi-val" style="font-size:10px;color:#00ff88">0</div>
+        <div class="vsi-lbl">FPM</div>
+      </div>
+
+      <div id="compass-wrap">
+        <div id="hdg-box">HDG 090°</div>
+        <div id="compass-strip">
+          <div id="compass-track"></div>
+          <div id="compass-center-line"></div>
+        </div>
+      </div>
+
+      <div id="status-strip">
+        <div class="status-item">GS <span class="status-val" id="gs-val">0</span> KT</div>
+        <div class="status-item">VS <span class="status-val" id="vs-val">0</span> FPM</div>
+        <div class="status-item">G <span class="status-val" id="g-val">1.0</span></div>
+        <div class="status-item">ENG <span class="status-ok">ON</span></div>
+        <div class="status-item">A/P <span class="status-warn">OFF</span></div>
+      </div>
+
+      <div id="gear-flap">
+        <div class="gf-item" id="gear-item" style="color:#00ff88">LDG GR <span id="gear-txt">DN</span></div>
+        <div class="gf-item" id="flap-item" style="color:#7a9a7a">FLAPS <span id="flap-txt">0</span>°</div>
+      </div>
+
+      <div id="phase-badge">ON GROUND</div>
+      <div id="stall-warn">⚠ STALL ⚠</div>
+    </div>
+  </div>
+
+  <div id="controls-panel">
+    <span class="ctrl-key">W/S</span><span class="ctrl-desc">Pitch</span>
+    <span class="ctrl-key">A/D</span><span class="ctrl-desc">Roll</span>
+    <span class="ctrl-key">Q/E</span><span class="ctrl-desc">Rudder</span>
+    <div class="ctrl-sep"></div>
+    <span class="ctrl-key">F</span><span class="ctrl-desc">Throttle ↑</span>
+    <span class="ctrl-key">V</span><span class="ctrl-desc">Throttle ↓</span>
+    <div class="ctrl-sep"></div>
+    <span class="ctrl-key">G</span><span class="ctrl-desc">Gear</span>
+    <span class="ctrl-key">B</span><span class="ctrl-desc">Brakes</span>
+    <span class="ctrl-key">P</span><span class="ctrl-desc">Flaps+</span>
+    <span class="ctrl-key">O</span><span class="ctrl-desc">Flaps-</span>
+    <div class="ctrl-sep"></div>
+    <span class="ctrl-key">R</span><span class="ctrl-desc">Reset</span>
+    <span class="ctrl-key">C</span><span class="ctrl-desc">Cam</span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+let simStarted = false;
+
+function startSim(){
+  document.getElementById('start-overlay').style.display='none';
+  simStarted = true;
+  document.getElementById('three-canvas').focus();
+}
+
+const canvas = document.getElementById('three-canvas');
+canvas.setAttribute('tabindex','0');
+
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a3a5a);
+scene.fog = new THREE.FogExp2(0x1a3a6a, 0.000018);
+
+const camera = new THREE.PerspectiveCamera(75,1,0.1,80000);
+
+function resize(){
+  const w = document.getElementById('canvas-wrap').clientWidth;
+  const h = document.getElementById('canvas-wrap').clientHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize',resize);
+
+const sun = new THREE.DirectionalLight(0xfff0d0,1.4);
+sun.position.set(8000,6000,4000);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near=1; sun.shadow.camera.far=30000;
+sun.shadow.camera.left=-8000; sun.shadow.camera.right=8000;
+sun.shadow.camera.top=8000; sun.shadow.camera.bottom=-8000;
+scene.add(sun);
+scene.add(new THREE.AmbientLight(0x203050,0.8));
+scene.add(new THREE.HemisphereLight(0x4080c0,0x305020,0.5));
+
+// Terrain
+const geo = new THREE.PlaneGeometry(60000,60000,80,80);
+const pos = geo.attributes.position;
+for(let i=0;i<pos.count;i++){
+  const x=pos.getX(i), z=pos.getY(i);
+  const dist=Math.sqrt(x*x+z*z);
+  const flat=Math.max(0,1-dist/1500);
+  const n=Math.sin(x*0.0001)*Math.cos(z*0.0001)*600
+    +Math.sin(x*0.0003+1)*Math.cos(z*0.0002+2)*200
+    +Math.sin(x*0.0008)*Math.cos(z*0.0007)*80;
+  pos.setZ(i,n*(1-flat));
+}
+geo.computeVertexNormals();
+const terrain=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:0x2a4a1a}));
+terrain.rotation.x=-Math.PI/2; terrain.receiveShadow=true;
+scene.add(terrain);
+
+// Runway
+const rw=new THREE.Mesh(new THREE.PlaneGeometry(60,2200),new THREE.MeshLambertMaterial({color:0x1a1c1e}));
+rw.rotation.x=-Math.PI/2; rw.position.set(0,0.2,0); scene.add(rw);
+for(let i=-900;i<900;i+=80){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(3,24),new THREE.MeshLambertMaterial({color:0xe8e0c0}));
+  m.rotation.x=-Math.PI/2; m.position.set(0,0.3,i); scene.add(m);
+}
+
+// Buildings
+[[200,50,40,30,25,0x3a4a5a],[240,80,30,30,35,0x4a5a6a],[280,40,50,40,18,0x2a3a4a],
+ [320,70,35,25,28,0x3a5a4a],[-200,60,45,35,22,0x4a4a3a],[-250,80,30,30,30,0x3a3a5a]].forEach(([x,z,w,d,h,c])=>{
+  const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshLambertMaterial({color:c}));
+  b.position.set(x,h/2,z); b.castShadow=true; scene.add(b);
+});
+
+// Trees
+for(let i=0;i<60;i++){
+  const x=(Math.random()-0.5)*8000, z=(Math.random()-0.5)*8000;
+  const t=new THREE.Mesh(new THREE.ConeGeometry(0,4,10,6),new THREE.MeshLambertMaterial({color:0x1a4a1a}));
+  t.position.set(x,5,z); scene.add(t);
+}
+
+// Clouds
+const cloudMat=new THREE.MeshLambertMaterial({color:0xd0e0f0,transparent:true,opacity:0.85});
+const clouds=[];
+for(let i=0;i<20;i++){
+  const g=new THREE.Group();
+  [[0,0,0,18,8,18],[14,2,0,14,7,14],[-14,1,0,14,6,14]].forEach(([cx,cy,cz,rw2,rh,rd])=>{
+    const cg=new THREE.SphereGeometry(1,6,4); cg.scale(rw2,rh,rd);
+    const cm=new THREE.Mesh(cg,cloudMat); cm.position.set(cx,cy,cz); g.add(cm);
+  });
+  g.position.set((Math.random()-0.5)*25000,1200+Math.random()*1500,(Math.random()-0.5)*25000);
+  scene.add(g); clouds.push(g);
+}
+
+// Aircraft
+const aircraft=new THREE.Group();
+const fusMat=new THREE.MeshLambertMaterial({color:0xe0e8f0});
+const wingMat=new THREE.MeshLambertMaterial({color:0xd0d8e8});
+const engMat=new THREE.MeshLambertMaterial({color:0x506070});
+const fus=new THREE.Mesh(new THREE.CylinderGeometry(0.6,1.0,14,12),fusMat);
+fus.rotation.z=Math.PI/2; aircraft.add(fus);
+const nose=new THREE.Mesh(new THREE.ConeGeometry(0.6,3,12),fusMat);
+nose.rotation.z=-Math.PI/2; nose.position.x=8.5; aircraft.add(nose);
+const tail=new THREE.Mesh(new THREE.ConeGeometry(0.9,4,12),fusMat);
+tail.rotation.z=Math.PI/2; tail.position.x=-7; aircraft.add(tail);
+const wings=new THREE.Mesh(new THREE.BoxGeometry(1,0.12,30),wingMat);
+aircraft.add(wings);
+const stab=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.1,10),wingMat);
+stab.position.set(-4,0.5,0); aircraft.add(stab);
+const vfin=new THREE.Mesh(new THREE.BoxGeometry(5,4,0.1),wingMat);
+vfin.rotation.z=Math.PI/2; vfin.position.set(-5,2,0); aircraft.add(vfin);
+[-12,12].forEach(z=>{
+  const e=new THREE.Mesh(new THREE.CylinderGeometry(0.9,1.1,4,10),engMat);
+  e.rotation.z=Math.PI/2; e.position.set(1,-0.8,z); aircraft.add(e);
+});
+const gearMeshes=[];
+[[0,-1.8,0],[0,-1.8,8],[0,-1.8,-8]].forEach(([x,y,z])=>{
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.35,1.2,8),new THREE.MeshLambertMaterial({color:0x303030}));
+  m.position.set(x,y,z); aircraft.add(m); gearMeshes.push(m);
+});
+aircraft.castShadow=true;
+scene.add(aircraft);
+
+const state={
+  pos:new THREE.Vector3(0,2,500),
+  vel:new THREE.Vector3(0,0,0),
+  pitch:0,roll:0,yaw:Math.PI,
+  pitchRate:0,rollRate:0,yawRate:0,
+  throttle:0,airspeed:0,altitude:0,vspeed:0,
+  gearDown:true,flaps:0,onGround:true,crashed:false,
+  phase:'ON GROUND',camMode:0
+};
+
+const keys={};
+document.addEventListener('keydown',e=>{
+  if(!simStarted) return;
+  keys[e.key.toLowerCase()]=true;
+  e.preventDefault();
+});
+document.addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
+
+// Also handle clicks on canvas to capture focus
+canvas.addEventListener('click',()=>{ canvas.focus(); });
+
+let gearCool=0,flapCool=0,camCool=0;
+
+function getTerrainH(x,z){
+  const d=Math.sqrt(x*x+z*z);
+  const flat=Math.max(0,1-d/1500);
+  return (Math.sin(x*0.0001)*Math.cos(z*0.0001)*600
+    +Math.sin(x*0.0003+1)*Math.cos(z*0.0002+2)*200
+    +Math.sin(x*0.0008)*Math.cos(z*0.0007)*80)*(1-flat);
+}
+
+function physics(dt){
+  const s=state;
+  if(s.crashed)return;
+  if(keys['f'])s.throttle=Math.min(1,s.throttle+dt*0.3);
+  if(keys['v'])s.throttle=Math.max(0,s.throttle-dt*0.5);
+  gearCool-=dt; flapCool-=dt; camCool-=dt;
+  if(keys['g']&&gearCool<=0&&!s.onGround){s.gearDown=!s.gearDown;gearCool=0.5;}
+  if(keys['p']&&flapCool<=0){s.flaps=Math.min(40,s.flaps+10);flapCool=0.3;}
+  if(keys['o']&&flapCool<=0){s.flaps=Math.max(0,s.flaps-10);flapCool=0.3;}
+  if(keys['c']&&camCool<=0){s.camMode=(s.camMode+1)%4;camCool=0.3;}
+  if(keys['r'])resetFlight();
+
+  const spd=s.vel.length();
+  s.airspeed=spd*1.944;
+  const rho=1.225*Math.exp(-s.pos.y/8500);
+  const q=0.5*rho*spd*spd;
+  const aoa=s.pitch*57.3;
+  const cl=Math.max(0,Math.min(1.6,0.12*(aoa+2)+s.flaps*0.008));
+  const cd=0.025+cl*cl/12+s.flaps*0.001+(s.gearDown?0.015:0);
+  const lift=q*80*cl, drag=q*80*cd, mass=60000, g=9.81;
+  const fwd=new THREE.Vector3(Math.cos(s.pitch)*Math.sin(s.yaw),Math.sin(s.pitch),Math.cos(s.pitch)*Math.cos(s.yaw));
+  const up=new THREE.Vector3(
+    Math.cos(s.roll)*(-Math.sin(s.pitch)*Math.sin(s.yaw)),
+    Math.cos(s.pitch)*Math.cos(s.roll),
+    Math.cos(s.roll)*(-Math.sin(s.pitch)*Math.cos(s.yaw)));
+  up.normalize();
+  const acc=new THREE.Vector3();
+  acc.addScaledVector(fwd,s.throttle*280000/mass);
+  if(spd>0.1) acc.addScaledVector(fwd,-drag/mass);
+  acc.y-=g;
+  acc.addScaledVector(up,lift/mass);
+  if(s.onGround){
+    acc.y=Math.max(0,acc.y);
+    const bf=keys['b']?0.8:0.02;
+    s.vel.x*=Math.max(0,1-bf*dt*8);
+    s.vel.z*=Math.max(0,1-bf*dt*8);
+    s.vel.y=0;
+    s.pitch*=0.92; s.roll*=0.92;
+  }
+  s.vel.addScaledVector(acc,dt);
+  if(s.vel.length()>180) s.vel.setLength(180);
+  s.pos.addScaledVector(s.vel,dt);
+
+  const gh=Math.max(0,getTerrainH(s.pos.x,s.pos.z));
+  const minY=gh+(s.gearDown?2:0);
+  if(s.pos.y<=minY+0.05){
+    if(s.airspeed>185&&!s.onGround){
+      s.crashed=true;
+      document.getElementById('phase-badge').textContent='CRASHED';
+      document.getElementById('phase-badge').style.color='#ff4040';
+      return;
+    }
+    s.pos.y=minY; s.vel.y=Math.max(0,s.vel.y); s.onGround=true;
+  } else s.onGround=false;
+
+  const eff=Math.max(0.1,Math.min(1,spd/60));
+  const pi=(keys['w']?-1:0)+(keys['s']?1:0);
+  const ri=(keys['a']?-1:0)+(keys['d']?1:0);
+  const yi=(keys['q']?1:0)+(keys['e']?-1:0);
+  s.pitchRate+=(pi*1.2-s.pitchRate)*Math.min(1,dt*8)*eff;
+  s.rollRate+=(ri*1.4-s.rollRate)*Math.min(1,dt*8)*eff;
+  s.yawRate+=(yi*0.6-s.yawRate)*Math.min(1,dt*6)*eff;
+  s.pitch=Math.max(-1.4,Math.min(1.4,s.pitch+s.pitchRate*dt));
+  s.roll=Math.max(-2.3,Math.min(2.3,s.roll+s.rollRate*dt));
+  s.yaw+=s.yawRate*dt+s.roll*s.airspeed*0.00004*dt;
+  s.altitude=s.pos.y*3.28084;
+  s.vspeed=s.vel.y*196.85;
+
+  const stall=s.airspeed<85&&!s.onGround;
+  document.getElementById('stall-warn').style.display=stall?'block':'none';
+  if(s.onGround) s.phase=s.airspeed>2?'ROLLING':'ON GROUND';
+  else if(s.vspeed>200) s.phase='CLIMBING';
+  else if(s.vspeed<-200) s.phase='DESCENDING';
+  else s.phase='CRUISE';
+}
+
+function updateScene(){
+  const s=state;
+  aircraft.position.copy(s.pos);
+  aircraft.rotation.order='YXZ';
+  aircraft.rotation.y=s.yaw;
+  aircraft.rotation.x=s.pitch;
+  aircraft.rotation.z=-s.roll;
+  gearMeshes.forEach(m=>m.visible=s.gearDown);
+
+  const camModes=[
+    ()=>{
+      const off=new THREE.Vector3(0,5,25);
+      off.applyEuler(new THREE.Euler(0,s.yaw,0,'YXZ'));
+      camera.position.copy(s.pos.clone().add(off));
+      camera.lookAt(s.pos.clone().add(new THREE.Vector3(Math.sin(s.yaw)*60,s.pitch*30,-Math.cos(s.yaw)*60)));
+    },
+    ()=>{
+      const off=new THREE.Vector3(0,1.8,-9);
+      off.applyEuler(new THREE.Euler(s.pitch,s.yaw,s.roll,'YXZ'));
+      camera.position.copy(s.pos.clone().add(off));
+      camera.lookAt(s.pos.clone().add(new THREE.Vector3(Math.sin(s.yaw)*200,s.pitch*80,-Math.cos(s.yaw)*200)));
+    },
+    ()=>{camera.position.copy(s.pos.clone().add(new THREE.Vector3(0,250,-200)));camera.lookAt(s.pos);},
+    ()=>{
+      const off=new THREE.Vector3(-50,12,0);
+      off.applyEuler(new THREE.Euler(0,s.yaw,0,'YXZ'));
+      camera.position.copy(s.pos.clone().add(off));
+      camera.lookAt(s.pos);
+    }
+  ];
+  camModes[s.camMode]();
+
+  const t=Math.min(1,s.altitude/25000);
+  const r=0x1a/255*(1-t)+0x05/255*t;
+  const gv=0x3a/255*(1-t)+0x08/255*t;
+  const b=0x5a/255*(1-t)+0x12/255*t;
+  scene.background=new THREE.Color(r,gv,b);
+  clouds.forEach((c,i)=>{c.position.x+=0.1*(i%2?1:-1);});
+}
+
+function updateHUD(){
+  const s=state;
+  document.getElementById('spd-val').textContent=Math.round(s.airspeed);
+  document.getElementById('alt-val').textContent=Math.round(s.altitude);
+  document.getElementById('gs-val').textContent=Math.round(s.airspeed);
+  document.getElementById('vs-val').textContent=Math.round(s.vspeed);
+  document.getElementById('g-val').textContent=(1+Math.abs(s.pitchRate)*0.3).toFixed(1);
+  document.getElementById('throttle-bar-fill').style.height=(s.throttle*100)+'%';
+  document.getElementById('thr-pct').textContent=Math.round(s.throttle*100)+'%';
+  document.getElementById('vsi-arrow').textContent=s.vspeed>50?'↑':s.vspeed<-50?'↓':'↕';
+  document.getElementById('vsi-arrow').style.color=s.vspeed>0?'#00ff88':'#e87050';
+  document.getElementById('vsi-val').textContent=Math.round(s.vspeed);
+  document.getElementById('gear-txt').textContent=s.gearDown?'DN':'UP';
+  document.getElementById('gear-item').style.color=s.gearDown?'#00ff88':'#e8a020';
+  document.getElementById('flap-txt').textContent=s.flaps;
+  document.getElementById('phase-badge').textContent=s.phase;
+
+  const skyH=Math.max(0,Math.min(100,50-s.pitch*57.3*2));
+  document.getElementById('adi-sky').style.height=skyH+'%';
+  document.getElementById('adi-ground').style.top=skyH+'%';
+  document.getElementById('adi-ground').style.height=(100-skyH)+'%';
+  document.getElementById('adi-horizon').style.top=skyH+'%';
+  document.getElementById('adi-bg').style.transform=`rotate(${s.roll*57.3}deg)`;
+
+  const hdg=((s.yaw%(Math.PI*2))*(180/Math.PI)+360)%360;
+  document.getElementById('hdg-box').textContent=`HDG ${String(Math.round(hdg)).padStart(3,'0')}°`;
+  const marks=['N','030','060','E','120','150','S','210','240','W','300','330'];
+  let comp='';
+  for(let i=0;i<36;i++){
+    const deg=i*10;
+    const lbl=deg%30===0?marks[deg/30]:i%3===0?String(deg).padStart(3,'0'):'|';
+    comp+=`<span style="display:inline-block;width:${320/36}px;text-align:center;font-size:9px;color:${deg%90===0?'#e8c060':'#5a8a7a'}">${lbl}</span>`;
+  }
+  document.getElementById('compass-track').innerHTML=comp;
+  document.getElementById('compass-track').style.left=`${-(hdg/360)*320+160}px`;
+}
+
+function resetFlight(){
+  state.pos.set(0,2,500); state.vel.set(0,0,0);
+  state.pitch=0; state.roll=0; state.yaw=Math.PI;
+  state.pitchRate=0; state.rollRate=0; state.yawRate=0;
+  state.throttle=0; state.airspeed=0; state.altitude=0; state.vspeed=0;
+  state.gearDown=true; state.flaps=0; state.onGround=true; state.crashed=false;
+  state.phase='ON GROUND'; state.camMode=0;
+  document.getElementById('phase-badge').style.color='#7ab070';
+  document.getElementById('stall-warn').style.display='none';
+}
+
+let lastT=0;
+function animate(t){
+  requestAnimationFrame(animate);
+  const dt=Math.min((t-lastT)/1000,0.05);
+  lastT=t;
+  if(dt<=0||!simStarted)return;
+  physics(dt);
+  updateScene();
+  updateHUD();
+  renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
