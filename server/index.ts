@@ -1,0 +1,25 @@
+import express from 'express';
+import { createServer } from 'http';
+import WebSocket, { WebSocketServer } from 'ws';
+import { Pool } from 'pg';
+import { AIRCRAFT } from '../src/data/aircraft';
+import { AIRLINES, MISSIONS, ROUTE, WEATHER } from '../src/data/world';
+
+const app=express();
+app.use((_,res,next)=>{res.setHeader('Access-Control-Allow-Origin','*');res.setHeader('Access-Control-Allow-Headers','Content-Type');res.setHeader('Access-Control-Allow-Methods','GET,POST,OPTIONS');next()});
+app.use(express.json());
+const pool=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL}):undefined;
+const pilots=new Map<string,{id:string;name:string;rank:string;reputation:number;salary:number}>();
+const logbooks=new Map<string,unknown[]>();
+app.get('/api/health',(_,res)=>res.json({ok:true,name:'FlightZim API',features:['REST','WebSocket multiplayer','PostgreSQL-ready','missions','career','ATC']}));
+app.get('/api/aircraft',(_,res)=>res.json(AIRCRAFT));
+app.get('/api/weather',(_,res)=>res.json(WEATHER));
+app.get('/api/missions',(_,res)=>res.json(MISSIONS));
+app.get('/api/navigation/route',(_,res)=>res.json({...ROUTE,navaids:['VOR','DME','NDB','ILS','GPS'],procedures:['SID','STAR','RNAV','Holding Pattern']}));
+app.get('/api/traffic',(_,res)=>res.json(AIRLINES.map((airline,i)=>({callsign:`${airline.toUpperCase().replace(/\s/g,'').slice(0,3)}${120+i*7}`,airline,aircraft:AIRCRAFT[(i+4)%AIRCRAFT.length].name,phase:['pushback','taxi','departure','cruise','approach'][i%5]}))));
+app.post('/api/pilots',(req,res)=>{const id=crypto.randomUUID();const pilot={id,name:req.body.name??'Student Pilot',rank:'Student Pilot',reputation:50,salary:0};pilots.set(id,pilot);logbooks.set(id,[]);res.status(201).json(pilot)});
+app.get('/api/pilots/:id',(req,res)=>{const pilot=pilots.get(req.params.id);if(!pilot)return res.status(404).json({error:'Pilot not found'});res.json({...pilot,logbook:logbooks.get(req.params.id)??[]})});
+app.post('/api/flights',(req,res)=>{const flight={id:crypto.randomUUID(),createdAt:new Date().toISOString(),...req.body};if(req.body.pilotId)logbooks.set(req.body.pilotId,[...(logbooks.get(req.body.pilotId)??[]),flight]);res.status(201).json(flight)});
+app.get('/api/db/status',async(_,res)=>{if(!pool)return res.json({connected:false,message:'Set DATABASE_URL to enable PostgreSQL persistence.'});try{await pool.query('select 1');res.json({connected:true})}catch(error){res.status(503).json({connected:false,error:String(error)})}});
+const server=createServer(app);const wss=new WebSocketServer({server,path:'/multiplayer'});const clients=new Map<string,{socket:WebSocket;state:unknown}>();wss.on('connection',(socket)=>{const id=crypto.randomUUID();clients.set(id,{socket,state:{}});socket.send(JSON.stringify({type:'welcome',id,route:ROUTE}));socket.on('message',(raw)=>{let message:unknown;try{message=JSON.parse(String(raw))}catch{return}clients.set(id,{socket,state:message});const packet=JSON.stringify({type:'traffic-update',id,state:message,players:clients.size});for(const [other,client] of clients)if(other!==id&&client.socket.readyState===WebSocket.OPEN)client.socket.send(packet)});socket.on('close',()=>clients.delete(id))});
+const port=Number(process.env.PORT??3001);server.listen(port,()=>console.log(`FlightZim API listening on http://localhost:${port}`));
