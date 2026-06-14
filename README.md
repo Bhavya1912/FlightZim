@@ -6,6 +6,8 @@ A playable full-stack flight simulator prototype inspired by Microsoft Flight Si
 
 - React + TypeScript frontend powered by Three.js rendering and Zustand state.
 - Playable aircraft physics: lift, drag, thrust, weight, stall/overspeed, pitch/roll/yaw, gear, flaps, brakes, turbulence, crosswind, fuel burn, climb/descent, and aircraft weight/performance differences.
+- Improved procedural aircraft model with swept wings, winglets, cockpit glazing, passenger windows, engine nacelles, fan discs, landing gear, beacon/nav lights, and PBR-style materials.
+- Web Audio sound engine with throttle-responsive engine rumble, wind noise, gear/flap actuation cues, and stall/overspeed warning tone.
 - Professional aviation UI: PFD, speed/altitude tapes, FMC/navigation panel, weather, ATC, mission, training, career score, AI traffic, and camera modes.
 - Aircraft fleet: Cessna 172, Cirrus SR22, Diamond DA40, Embraer E175, CRJ900, A320neo, A350, A380, 737 MAX 8, 787-9, 777-300ER, 747-8F, and Airbus Beluga.
 - Backend: Node.js + Express REST APIs, WebSocket multiplayer endpoint, PostgreSQL schema.
@@ -17,7 +19,7 @@ npm install
 npm run dev
 ```
 
-Open the Vite URL and press **Start Flight**.
+Open the Vite URL and press **Start Flight**. Audio starts after the first user click so the browser can unlock Web Audio playback.
 
 ## Controls
 
